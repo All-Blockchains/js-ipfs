@@ -2,8 +2,6 @@
 
 const multipart = require('../../utils/multipart-request-parser')
 const all = require('it-all')
-const dagPB = require('ipld-dag-pb')
-const { DAGLink } = dagPB
 const Joi = require('../../utils/joi')
 const multibase = require('multibase')
 const Boom = require('@hapi/boom')
@@ -685,7 +683,12 @@ exports.patchAddLink = {
         signal,
         timeout
       })
-      cid = await ipfs.object.patch.addLink(root, new DAGLink(name, node.size, ref), {
+      const link = {
+        Name: name,
+        Tsize: node.size,
+        Hash: ref
+      }
+      cid = await ipfs.object.patch.addLink(root, link, {
         enc,
         signal,
         timeout

@@ -4,11 +4,21 @@ const { mergeOptions } = require('../utils')
 const { isTest } = require('ipfs-utils/src/env')
 const log = require('debug')('ipfs')
 
-const { DAGNode } = require('ipld-dag-pb')
+// @ts-ignore
+const dagPb = require('@ipld/dag-pb')
 const UnixFs = require('ipfs-unixfs')
-const multicodec = require('multicodec')
+//const multicodec = require('multicodec')
+// @ts-ignore
+const Block = require('multiformats/block')
+// @ts-ignore
+const { sha256 } = require('multiformats/hashes/sha2')
+// NOTE vmx 2021-02-19: Not importet as CID to make the type checker happy
+const cids = require('cids')
+const CID = require('multiformats/cid')
+const IpldBlock = require('ipld-block')
 const initAssets = require('../runtime/init-assets-nodejs')
 const { AlreadyInitializedError } = require('../errors')
+const asLegacyCid = require('ipfs-core-utils/src/as-legacy-cid')
 
 const createStartAPI = require('./start')
 const createStopAPI = require('./stop')
@@ -47,6 +57,54 @@ const createPingAPI = require('./ping')
 const createDHTAPI = require('./dht')
 const createPubSubAPI = require('./pubsub')
 
+
+
+// Make the block service take and return new CIDs and also not return
+// js-ipld-blocks, but just plain objects with a `cid` and `bytes` property
+class NewBlockService {
+  constructor(legacyBlockService) {
+    this.blockService = legacyBlockService
+    this.setExchange = legacyBlockService.setExchange
+    this.unsetExchange = legacyBlockService.unsetExchange
+  }
+
+  async get (cid, options) {
+    //console.log('vmx: blockservice new cid wrappen call: get: has cid.codec (is old cid):', 'codec' in cid)
+    const legacyCid = asLegacyCid(cid)
+    const block = await this.blockService.get(legacyCid, options)
+    return {
+      cid: CID.decode(block.cid.bytes),
+      bytes: block.data
+    }
+  }
+
+  async * getMnay (cids, options) {
+    //console.log('vmx: blockservice new cid wrappen call: getMany')
+    const legacyCids = cids.map(asLegacyCid)
+    for await (const block of this.blockService.getMany(legacyCids, options)) {
+      yield {
+        cid: CID.decode(block.cid.bytes),
+        bytes: block.data
+      }
+    }
+  }
+
+  put (block, options) {
+    //console.log('vmx: blockservice new cid wrappen call: put: block:', block)
+    const legacyCid = asLegacyCid(block.cid)
+    return this.blockService.put(new IpldBlock(block.bytes, legacyCid))
+  }
+
+  putMany (blocks, options) {
+    //console.log('vmx: blockservice new cid wrappen call: putMany')
+    const legacyBlocks = block.map((block) => {
+      const legacyCid = asLegacyCid(block.cid)
+      return new IpldBlock(block.bytes, legacyCid)
+    })
+    return blockService.putMany(legacyBlocks)
+  }
+}
+
 class IPFS {
   /**
    * @param {Object} config
@@ -60,9 +118,55 @@ class IPFS {
 
     const preload = createPreloadAPI(options.preload)
 
+    const legacyBlockService = new IPFSBlockService(storage.repo)
+    const blockService = new NewBlockService(legacyBlockService)
     /** @type {BlockService} */
-    const blockService = new IPFSBlockService(storage.repo)
-    const ipld = createIPLD({ blockService, print, options: options.ipld })
+    //const blockService = new IPFSBlockService(storage.repo)
+    //// Make the block service take and return new CIDs and also not return
+    //// js-ipld-blocks, but just plain objects with a `cid` and `bytes` property
+    //blockService.get = (cid, options) => {
+    //  return async (cid, options) => {
+    //    console.log('vmx: blockservice new cid wrappen call: get')
+    //    const legacyCid = asLegacyCid(cid)
+    //    const block = await blockService.get(legacyCid, options)
+    //    return {
+    //      cid: CID.parse(block.cid.bytes),
+    //      bytes: block.data
+    //    }
+    //  }
+    //}
+    //blockService.getMany = function * (cids, options) {
+    //  return async function * (cids, options) {
+    //    console.log('vmx: blockservice new cid wrappen call: getMany')
+    //    const legacyCids = cids.map(asLegacyCid)
+    //    for await (const block of blockService.getMany(legacyCids, options)) {
+    //      yield {
+    //        cid: CID.parse(block.cid.bytes),
+    //        bytes: block.data
+    //      }
+    //    }
+    //  }
+    //}
+    //blockService.put = (block, options) => {
+    //  return (block, options) => {
+    //    console.log('vmx: blockservice new cid wrappen call: put: block:', block)
+    //    const legacyCid = asLegacyCid(block.cid)
+    //    return blockService.put(new IpldBlock(block.bytes, legacyCid))
+    //  }
+    //}
+    //blockService.putMany = (blocks, options) => {
+    //  return (blocks, options) => {
+    //    console.log('vmx: blockservice new cid wrappen call: putMany')
+    //    const legacyBlocks = block.map((block) => {
+    //      const legacyCid = asLegacyCid(block.cid)
+    //      return new IpldBlock(block.bytes, legacyCid)
+    //    })
+    //    return blockService.putMany(legacyBlocks)
+    //  }
+    //}
+
+
+    const ipld = createIPLD({ blockService: legacyBlockService, print, options: options.ipld })
 
     const gcLock = createGCLockAPI({
       path: repo.path,
@@ -87,9 +191,9 @@ class IPFS {
     const resolve = createResolveAPI({ ipld, name })
     const pinManager = new PinManagerAPI({ repo, dagReader })
     const pin = new PinAPI({ gcLock, pinManager, dagReader })
-    const block = new BlockAPI({ blockService, preload, gcLock, pinManager, pin })
+    const block = new BlockAPI({ blockService: legacyBlockService, preload, gcLock, pinManager, pin })
     const dag = new DagAPI({ ipld, preload, gcLock, pin, dagReader })
-    const refs = Object.assign(createRefsAPI({ ipld, resolve, preload }), {
+    const refs = Object.assign(createRefsAPI({ blockService, resolve, preload }), {
       local: createRefsLocalAPI({ repo: storage.repo })
     })
     const { add, addAll, cat, get, ls } = new RootAPI({
@@ -97,7 +201,7 @@ class IPFS {
       preload,
       pin,
       block,
-      ipld,
+      blockService,
       options: options.EXPERIMENTAL
     })
 
@@ -116,6 +220,7 @@ class IPFS {
       options: options.preload
     })
 
+    this.blockService = blockService
     this.preload = preload
     this.name = name
     this.ipld = ipld
@@ -248,17 +353,17 @@ const initOptions = ({ init }) =>
  * @param {IPFS} ipfs
  */
 const addEmptyDir = async (ipfs) => {
-  const node = new DAGNode(new UnixFs('directory').marshal())
-  const cid = await ipfs.dag.put(node, {
-    version: 0,
-    format: multicodec.DAG_PB,
-    hashAlg: multicodec.SHA2_256,
-    preload: false
+  const node = dagPb.prepare({ Data: new UnixFs('directory').marshal() })
+  const block = await Block.encode({
+    value: node,
+    codec: dagPb,
+    hasher: sha256
   })
+  await ipfs.blockService.put(block)
 
-  await ipfs.pin.add(cid)
+  await ipfs.pin.add(asLegacyCid(block.cid))
 
-  return cid
+  return block.cid
 }
 
 /**

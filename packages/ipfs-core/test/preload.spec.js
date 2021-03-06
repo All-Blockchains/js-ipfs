@@ -27,7 +27,8 @@ describe('preload', () => {
   afterEach(() => MockPreloadNode.clearPreloadCids())
 
   it('should not preload content multiple times', async function () {
-    this.timeout(50 * 1000)
+    this.timeout(50 * 100000000)
+    debugger
     const { cid } = await ipfs.add(uint8ArrayFromString(nanoid()), { preload: false })
 
     await all(ipfs.cat(cid))
@@ -92,7 +93,8 @@ describe('preload', () => {
       path: 'dir0/file2',
       content: uint8ArrayFromString(nanoid())
     }], { wrapWithDirectory: true }))
-
+    //console.log('vmx: preload test res:', res.map((added) => 'codec' in added.cid))
+    //console.log('vmx: preload test res:', res)
     const wrappingDir = res.find(file => file.path === '')
     expect(wrappingDir).to.exist()
 

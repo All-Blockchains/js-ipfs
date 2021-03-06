@@ -3,7 +3,6 @@
 'use strict'
 
 const { expect } = require('aegir/utils/chai')
-const DAGNode = require('ipld-dag-pb').DAGNode
 const Readable = require('stream').Readable
 const FormData = require('form-data')
 const streamToPromise = require('stream-to-promise')
@@ -74,7 +73,7 @@ describe('/dag', () => {
     })
 
     it('returns value', async () => {
-      const node = new DAGNode(Uint8Array.from([]), [])
+      const node = { Data: Uint8Array.from([]) }
       ipfs.dag.get.withArgs(cid, defaultOptions).returns({ value: node })
 
       const res = await http({
@@ -88,7 +87,7 @@ describe('/dag', () => {
     })
 
     it('uses text encoding for data by default', async () => {
-      const node = new DAGNode(Uint8Array.from([0, 1, 2, 3]), [])
+      const node = { Data: Uint8Array.from([0, 1, 2, 3]) }
       ipfs.dag.get.withArgs(cid, defaultOptions).returns({ value: node })
 
       const res = await http({
@@ -103,7 +102,7 @@ describe('/dag', () => {
     })
 
     it('overrides data encoding', async () => {
-      const node = new DAGNode(Uint8Array.from([0, 1, 2, 3]), [])
+      const node = { Data: Uint8Array.from([0, 1, 2, 3]) }
       ipfs.dag.get.withArgs(cid, defaultOptions).returns({ value: node })
 
       const res = await http({
@@ -132,7 +131,7 @@ describe('/dag', () => {
     })
 
     it('returns value with a path as part of the cid for dag-pb nodes', async () => {
-      const node = new DAGNode(Uint8Array.from([0, 1, 2, 3]), [])
+      const node = { Data: Uint8Array.from([0, 1, 2, 3]) }
       ipfs.dag.get.withArgs(cid, {
         ...defaultOptions,
         path: '/Data'

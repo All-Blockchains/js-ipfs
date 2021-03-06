@@ -6,6 +6,7 @@ const { parseChunkerString } = require('./utils')
 const { pipe } = require('it-pipe')
 const withTimeoutOption = require('ipfs-core-utils/src/with-timeout-option')
 const mergeOptions = require('merge-options').bind({ ignoreUndefined: true })
+const asLegacyCid = require('ipfs-core-utils/src/as-legacy-cid')
 
 /**
  * @typedef {Object} Context
@@ -97,7 +98,9 @@ module.exports = ({ block, gcLock, preload, pin, options }) => {
         // do not keep file totals around forever
         delete totals[added.path]
 
-        yield added
+        const legacyAdded = added
+        legacyAdded.cid = asLegacyCid(added.cid)
+        yield legacyAdded
       }
     } finally {
       releaseLock()

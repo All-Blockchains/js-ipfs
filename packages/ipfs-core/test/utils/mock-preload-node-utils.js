@@ -13,7 +13,9 @@ module.exports.defaultAddr = defaultAddr
 
 // Get the stored preload CIDs for the server at `addr`
 const getPreloadCids = async (addr) => {
+  //console.log('vmx: getpreloadcids: addr', `${toUri(addr || defaultAddr)}/cids`)
   const res = await HTTP.get(`${toUri(addr || defaultAddr)}/cids`)
+  //console.log('vmx: getpreloadcids: res', res)
   return res.json()
 }
 
@@ -32,9 +34,11 @@ module.exports.waitForCids = async (cids, opts) => {
 
   cids = Array.isArray(cids) ? cids : [cids]
   cids = cids.map(cid => cid.toString()) // Allow passing CID instance
+  //console.log('vmx: wait for cids: cids:', cids)
 
   await waitFor(async () => {
     const preloadCids = await getPreloadCids(opts.addr)
+  //console.log('vmx: getpreloadcids:2', preloadCids)
 
     // See if our cached preloadCids includes all the cids we're looking for.
     const { missing, duplicates } = cids.reduce((results, cid) => {
